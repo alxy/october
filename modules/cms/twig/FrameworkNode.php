@@ -19,7 +19,7 @@ class FrameworkNode extends Twig_Node
     /**
      * Compiles the node to PHP.
      *
-     * @param Twig_Compiler A Twig_Compiler instance
+     * @param Twig_Compiler $compiler A Twig_Compiler instance
      */
     public function compile(Twig_Compiler $compiler)
     {
@@ -28,13 +28,16 @@ class FrameworkNode extends Twig_Node
 
         $compiler
             ->addDebugInfo($this)
-            ->write("echo '<script src=\"'. Request::getBaseUrl() .'/modules/system/assets/js/framework.js\"></script>'.PHP_EOL;" . PHP_EOL)
+            ->write("echo '<script src=\"'. Request::getBasePath()
+                .'/modules/system/assets/js/framework.js\"></script>'.PHP_EOL;" . PHP_EOL)
         ;
 
         if ($includeExtras) {
             $compiler
-                ->write("echo '<script src=\"'. Request::getBaseUrl() .'/modules/system/assets/js/framework.extras.js\"></script>'.PHP_EOL;" . PHP_EOL)
-                ->write("echo '<link href=\"'. Request::getBaseUrl() .'/modules/system/assets/css/framework.extras.css\" rel=\"stylesheet\">'.PHP_EOL;" . PHP_EOL)
+                ->write("echo '<script src=\"'. Request::getBasePath()
+                    .'/modules/system/assets/js/framework.extras.js\"></script>'.PHP_EOL;" . PHP_EOL)
+                ->write("echo '<link href=\"'. Request::getBasePath()
+                    .'/modules/system/assets/css/framework.extras.css\" rel=\"stylesheet\">'.PHP_EOL;" . PHP_EOL)
             ;
         }
     }

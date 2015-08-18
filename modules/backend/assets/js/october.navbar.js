@@ -4,7 +4,7 @@
  *   When the icon is clicked, the menu content is displayed on the left side of the page.
  * - If the content doesn't fit the navbar, it can be dragged left and right. 
  *
- * Dependences: 
+ * Dependences:
  * - DragScroll (october.dragscroll.js)
  * - VerticalMenu (october.verticalmenu.js)
  */
@@ -17,6 +17,18 @@
                 nav = $('ul.nav', navbar)
 
             nav.verticalMenu($('a.menu-toggle', navbar))
+
+            $('li.with-tooltip > a', navbar).tooltip({
+                container: 'body',
+                placement: 'bottom'
+            })
+
+            $('.layout-cell.width-fix', navbar).one('oc.widthFixed', function(){
+                var dragScroll = $('[data-control=toolbar]', navbar).data('oc.dragScroll')
+                if (dragScroll) {
+                    dragScroll.goToElement($('ul.nav > li.active', navbar), undefined, {'duration': 0})
+                }
+            })
         })
     })
 })(jQuery);

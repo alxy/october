@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="no-js <?= $this->makeLayoutPartial('browser_detector') ?>">
+<html lang="<?= Config::get('app.locale', 'en') ?>" class="no-js <?= $this->makeLayoutPartial('browser_detector') ?>">
     <head>
         <?= $this->makeLayoutPartial('head') ?>
     </head>
@@ -12,8 +12,19 @@
                     <?= $this->makeLayoutPartial('mainmenu') ?>
                 </div>
 
+                <?php $flyoutContent = Block::placeholder('sidepanel-flyout') ?>
+
                 <div class="layout-row">
-                    <div class="layout">
+                    <div class="layout flyout-container" 
+                        <?php if ($flyoutContent): ?>
+                            data-control="flyout"
+                            data-flyout-width="400"
+                            data-flyout-toggle="#layout-sidenav"
+                        <?php endif ?>
+                    >
+                        <?php if ($flyoutContent): ?>
+                            <div class="layout-cell flyout"> <?= $flyoutContent ?></div>
+                        <?php endif ?>
 
                         <!-- Side Navigation -->
                         <?= $this->makeLayoutPartial('sidenav') ?>
@@ -26,19 +37,23 @@
                         <?php endif ?>
 
                         <!-- Content Body -->
-                        <div class="layout-cell layout-container" id="layout-body" >
+                        <div class="layout-cell layout-container" id="layout-body">
                             <div class="layout-relative">
-                                <!-- Flash Messages -->
-                                <div id="layout-flash-messages"><?= $this->makeLayoutPartial('flash_messages') ?></div>
 
-                                <!-- Breadcrumb -->
-                                <?php if ($breadcrumbContent = Block::placeholder('breadcrumb')): ?>
-                                    <div class="control-breadcrumb">
-                                        <?= $breadcrumbContent ?>
+                                <div class="layout">
+                                    <?php if ($breadcrumbContent = Block::placeholder('breadcrumb')): ?>
+                                        <!-- Breadcrumb -->
+                                        <div class="control-breadcrumb">
+                                            <?= $breadcrumbContent ?>
+                                        </div>
+                                    <?php endif ?>
+
+                                    <!-- Content -->
+                                    <div class="layout-row">
+                                        <?= Block::placeholder('body') ?>
                                     </div>
-                                <?php endif ?>
+                                </div>
 
-                                <?= Block::placeholder('body') ?>
                             </div>
                         </div>
 
@@ -47,5 +62,9 @@
 
             </div>
         </div>
+
+        <!-- Flash Messages -->
+        <div id="layout-flash-messages"><?= $this->makeLayoutPartial('flash_messages') ?></div>
+
     </body>
 </html>

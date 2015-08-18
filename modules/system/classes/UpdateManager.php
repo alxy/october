@@ -2,16 +2,19 @@
 
 use App;
 use URL;
+use File;
 use Lang;
 use Http;
+use Cache;
 use Schema;
 use Config;
-use Carbon\Carbon;
+use ApplicationException;
+use Cms\Classes\ThemeManager;
 use System\Models\Parameters;
 use System\Models\PluginVersion;
-use System\Console\CacheClear;
-use System\Classes\ApplicationException;
+use System\Helpers\Cache as CacheHelper;
 use October\Rain\Filesystem\Zip;
+use Carbon\Carbon;
 use Exception;
 
 /**
@@ -48,6 +51,11 @@ class UpdateManager
     protected $pluginManager;
 
     /**
+     * @var Cms\Classes\ThemeManager
+     */
+    protected $themeManager;
+
+    /**
      * @var System\Classes\VersionManager
      */
     protected $versionManager;
@@ -63,16 +71,45 @@ class UpdateManager
     protected $secret;
 
     /**
+     * @var boolean If set to true, core updates will not be downloaded or extracted.
+     */
+    protected $disableCoreUpdates = false;
+
+    /**
+     * @var array Cache of gateway products
+     */
+    protected $productCache;
+
+    /**
      * Initialize this singleton.
      */
     protected function init()
     {
         $this->pluginManager = PluginManager::instance();
+        $this->themeManager = ThemeManager::instance();
         $this->versionManager = VersionManager::instance();
+        $this->tempDirectory = temp_path();
+        $this->baseDirectory = base_path();
+        $this->disableCoreUpdates = Config::get('cms.disableCoreUpdates', false);
+        $this->bindContainerObjects();
+
+        /*
+         * Ensure temp directory exists
+         */
+        if (!File::isDirectory($this->tempDirectory)) {
+            File::makeDirectory($this->tempDirectory, 0777, true);
+        }
+    }
+
+    /**
+     * These objects are "soft singletons" and may be lost when
+     * the IoC container reboots. This provides a way to rebuild
+     * for the purposes of unit testing.
+     */
+    public function bindContainerObjects()
+    {
         $this->migrator = App::make('migrator');
         $this->repository = App::make('migration.repository');
-        $this->tempDirectory = sys_get_temp_dir();
-        $this->baseDirectory = PATH_BASE;
     }
 
     /**
@@ -91,27 +128,29 @@ class UpdateManager
          * Update modules
          */
         $modules = Config::get('cms.loadModules', []);
-        foreach ($modules as $module)
+        foreach ($modules as $module) {
             $this->migrateModule($module);
+        }
 
         /*
          * Update plugins
          */
-        $plugins = $this->pluginManager->getPlugins();
-        foreach ($plugins as $name => $plugin) {
-            $this->updatePlugin($name);
+        $plugins = $this->pluginManager->sortByDependencies();
+        foreach ($plugins as $plugin) {
+            $this->updatePlugin($plugin);
         }
 
         Parameters::set('system::update.count', 0);
-        CacheClear::fireInternal();
+        CacheHelper::clear();
 
         /*
          * Seed modules
          */
         if ($firstUp) {
             $modules = Config::get('cms.loadModules', []);
-            foreach ($modules as $module)
+            foreach ($modules as $module) {
                 $this->seedModule($module);
+            }
         }
 
         return $this;
@@ -129,15 +168,17 @@ class UpdateManager
          * Already know about updates, never retry.
          */
         $oldCount = Parameters::get('system::update.count');
-        if ($oldCount > 0)
+        if ($oldCount > 0) {
             return $oldCount;
+        }
 
         /*
          * Retry period not passed, skipping.
          */
         if (!$force && ($retryTimestamp = Parameters::get('system::update.retry'))) {
-            if (Carbon::createFromTimeStamp($retryTimestamp)->isFuture())
+            if (Carbon::createFromTimeStamp($retryTimestamp)->isFuture()) {
                 return $oldCount;
+            }
         }
 
         try {
@@ -167,10 +208,14 @@ class UpdateManager
         $installed = PluginVersion::all();
         $versions = $installed->lists('version', 'code');
         $names = $installed->lists('name', 'code');
+        $icons = $installed->lists('icon', 'code');
+        $frozen = $installed->lists('is_frozen', 'code');
+        $build = Parameters::get('system::core.build');
 
         $params = [
             'core' => $this->getHash(),
             'plugins' => serialize($versions),
+            'build' => $build,
             'force' => $force
         ];
 
@@ -179,6 +224,7 @@ class UpdateManager
         }
 
         $result = $this->requestServerData('core/update', $params);
+        $updateCount = (int) array_get($result, 'update', 0);
 
         /*
          * Inject known core build
@@ -195,11 +241,48 @@ class UpdateManager
         foreach (array_get($result, 'plugins', []) as $code => $info) {
             $info['name'] = isset($names[$code]) ? $names[$code] : $code;
             $info['old_version'] = isset($versions[$code]) ? $versions[$code] : false;
-            $plugins[$code] = $info;
+            $info['icon'] = isset($icons[$code]) ? $icons[$code] : false;
+
+            /*
+             * If plugin has updates frozen, do not add it to the list
+             * and discount an update unit.
+             */
+            if (isset($frozen[$code]) && $frozen[$code]) {
+                $updateCount = max(0, --$updateCount);
+            }
+            else {
+                $plugins[$code] = $info;
+            }
         }
         $result['plugins'] = $plugins;
 
-        Parameters::set('system::update.count', array_get($result, 'update', 0));
+        /*
+         * Strip out themes that have been installed before
+         */
+        $themes = [];
+        foreach (array_get($result, 'themes', []) as $code => $info) {
+            if (!$this->themeManager->isInstalled($code)) {
+                $themes[$code] = $info;
+            }
+        }
+        $result['themes'] = $themes;
+
+        /*
+         * If there is a core update and core updates are disabled,
+         * remove the entry and discount an update unit.
+         */
+        if (array_get($result, 'core') && $this->disableCoreUpdates) {
+            $updateCount = max(0, --$updateCount);
+            unset($result['core']);
+        }
+
+        /*
+         * Recalculate the update counter
+         */
+        $updateCount += count($themes);
+        $result['hasUpdates'] = $updateCount > 0;
+        $result['update'] = $updateCount;
+        Parameters::set('system::update.count', $updateCount);
 
         return $result;
     }
@@ -234,7 +317,7 @@ class UpdateManager
          */
         $modules = Config::get('cms.loadModules', []);
         foreach ($modules as $module) {
-            $path = PATH_BASE . '/modules/'.strtolower($module).'/database/migrations';
+            $path = base_path() . '/modules/'.strtolower($module).'/database/migrations';
             $this->migrator->requireFiles($path, $this->migrator->getMigrationFiles($path));
         }
 
@@ -248,7 +331,9 @@ class UpdateManager
                 $this->note($note);
             }
 
-            if ($count == 0) break;
+            if ($count == 0) {
+                break;
+            }
         }
 
         Schema::dropIfExists('migrations');
@@ -276,7 +361,7 @@ class UpdateManager
      */
     public function migrateModule($module)
     {
-        $this->migrator->run(PATH_BASE . '/modules/'.strtolower($module).'/database/migrations');
+        $this->migrator->run(base_path() . '/modules/'.strtolower($module).'/database/migrations');
 
         $this->note($module);
         foreach ($this->migrator->getNotes() as $note) {
@@ -293,8 +378,9 @@ class UpdateManager
     public function seedModule($module)
     {
         $className = '\\'.$module.'\Database\Seeds\DatabaseSeeder';
-        if (!class_exists($className))
+        if (!class_exists($className)) {
             return;
+        }
 
         $seeder = App::make($className);
         $seeder->run();
@@ -323,8 +409,9 @@ class UpdateManager
     {
         $filePath = $this->getFilePath('core');
 
-        if (!Zip::extract($filePath, $this->baseDirectory))
+        if (!Zip::extract($filePath, $this->baseDirectory)) {
             throw new ApplicationException(Lang::get('system::lang.zip.extract_failed', ['file' => $filePath]));
+        }
 
         @unlink($filePath);
 
@@ -346,6 +433,17 @@ class UpdateManager
     public function requestPluginDetails($name)
     {
         $result = $this->requestServerData('plugin/detail', ['name' => $name]);
+        return $result;
+    }
+
+    /**
+     * Looks up content for a plugin from the update server.
+     * @param string $name Plugin name.
+     * @return array Content for the plugin.
+     */
+    public function requestPluginContent($name)
+    {
+        $result = $this->requestServerData('plugin/content', ['name' => $name]);
         return $result;
     }
 
@@ -385,13 +483,18 @@ class UpdateManager
          * Remove the plugin database and version
          */
         if (!($plugin = $this->pluginManager->findByIdentifier($name))) {
-            $this->note('<error>Unable to find:</error> ' . $name);
-            return;
+            if ($this->versionManager->purgePlugin($name)) {
+                $this->note('<info>Purged from database:</info> ' . $name);
+                return $this;
+            }
         }
 
-        if ($this->versionManager->removePlugin($plugin))
+        if ($this->versionManager->removePlugin($plugin)) {
             $this->note('<info>Rolled back:</info> ' . $name);
+            return $this;
+        }
 
+        $this->note('<error>Unable to find:</error> ' . $name);
         return $this;
     }
 
@@ -415,10 +518,164 @@ class UpdateManager
         $fileCode = $name . $hash;
         $filePath = $this->getFilePath($fileCode);
 
-        if (!Zip::extract($filePath, $this->baseDirectory . '/plugins/'))
+        if (!Zip::extract($filePath, $this->baseDirectory . '/plugins/')) {
             throw new ApplicationException(Lang::get('system::lang.zip.extract_failed', ['file' => $filePath]));
+        }
 
         @unlink($filePath);
+    }
+
+    //
+    // Themes
+    //
+
+    /**
+     * Looks up a theme from the update server.
+     * @param string $name Theme name.
+     * @return array Details about the theme.
+     */
+    public function requestThemeDetails($name)
+    {
+        $result = $this->requestServerData('theme/detail', ['name' => $name]);
+        return $result;
+    }
+
+    /**
+     * Downloads a theme from the update server.
+     * @param string $name Theme name.
+     * @param string $hash Expected file hash.
+     * @return self
+     */
+    public function downloadTheme($name, $hash)
+    {
+        $fileCode = $name . $hash;
+        $this->requestServerFile('theme/get', $fileCode, $hash, ['name' => $name]);
+    }
+
+    /**
+     * Extracts a theme after it has been downloaded.
+     */
+    public function extractTheme($name, $hash)
+    {
+        $fileCode = $name . $hash;
+        $filePath = $this->getFilePath($fileCode);
+
+        if (!Zip::extract($filePath, $this->baseDirectory . '/themes/')) {
+            throw new ApplicationException(Lang::get('system::lang.zip.extract_failed', ['file' => $filePath]));
+        }
+
+        $this->themeManager->setInstalled($name);
+        @unlink($filePath);
+    }
+
+    //
+    // Products
+    //
+
+    public function requestProductDetails($codes, $type = null)
+    {
+        if ($type != 'plugin' && $type != 'theme')
+            $type = 'plugin';
+
+        $codes = (array) $codes;
+        $this->loadProductDetailCache();
+
+        /*
+         * New products requested
+         */
+        $newCodes = array_diff($codes, array_keys($this->productCache[$type]));
+        if (count($newCodes)) {
+            $dataCodes = [];
+            $data = $this->requestServerData($type.'/details', ['names' => $newCodes]);
+            foreach ($data as $product) {
+                $code = array_get($product, 'code', -1);
+                $this->cacheProductDetail($type, $code, $product);
+                $dataCodes[] = $code;
+            }
+
+            /*
+             * Cache unknown products
+             */
+            $unknownCodes = array_diff($newCodes, $dataCodes);
+            foreach ($unknownCodes as $code) {
+                $this->cacheProductDetail($type, $code, -1);
+            }
+
+            $this->saveProductDetailCache();
+        }
+
+        /*
+         * Build details from cache
+         */
+        $result = [];
+        $requestedDetails = array_intersect_key($this->productCache[$type], array_flip($codes));
+
+        foreach ($requestedDetails as $detail) {
+            if ($detail === -1) continue;
+            $result[] = $detail;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Returns popular themes found on the marketplace.
+     */
+    public function requestPopularProducts($type = null)
+    {
+        if ($type != 'plugin' && $type != 'theme')
+            $type = 'plugin';
+
+        $cacheKey = 'system-updates-popular-'.$type;
+
+        if (Cache::has($cacheKey)) {
+            return @unserialize(Cache::get($cacheKey)) ?: [];
+        }
+
+        $data = $this->requestServerData($type.'/popular');
+        Cache::put($cacheKey, serialize($data), 60);
+
+        foreach ($data as $product) {
+            $code = array_get($product, 'code', -1);
+            $this->cacheProductDetail($type, $code, $product);
+        }
+
+        $this->saveProductDetailCache();
+
+        return $data;
+    }
+
+    protected function loadProductDetailCache()
+    {
+        $defaultCache = ['theme' => [], 'plugin' => []];
+        $cacheKey = 'system-updates-product-details';
+
+        if (Cache::has($cacheKey)) {
+            $this->productCache = @unserialize(Cache::get($cacheKey)) ?: $defaultCache;
+        }
+        else {
+            $this->productCache = $defaultCache;
+        }
+    }
+
+    protected function saveProductDetailCache()
+    {
+        if ($this->productCache === null) {
+            $this->loadProductDetailCache();
+        }
+
+        $cacheKey = 'system-updates-product-details';
+        $expiresAt = Carbon::now()->addDays(2);
+        Cache::put($cacheKey, serialize($this->productCache), $expiresAt);
+    }
+
+    protected function cacheProductDetail($type, $code, $data)
+    {
+        if ($this->productCache === null) {
+            $this->loadProductDetailCache();
+        }
+
+        $this->productCache[$type][$code] = $data;
     }
 
     //
@@ -467,17 +724,13 @@ class UpdateManager
      */
     public function requestServerData($uri, $postData = [])
     {
-        try {
-            $result = Http::post($this->createServerUrl($uri), function($http) use ($postData) {
-                $this->applyHttpAttributes($http, $postData);
-            });
-        }
-        catch (Exception $ex) {
-            throw new ApplicationException(Lang::get('system::lang.server.connect_error'));
-        }
+        $result = Http::post($this->createServerUrl($uri), function ($http) use ($postData) {
+            $this->applyHttpAttributes($http, $postData);
+        });
 
-        if ($result->code == 404)
+        if ($result->code == 404) {
             throw new ApplicationException(Lang::get('system::lang.server.response_not_found'));
+        }
 
         if ($result->code != 200) {
             throw new ApplicationException(
@@ -496,8 +749,9 @@ class UpdateManager
             throw new ApplicationException(Lang::get('system::lang.server.response_invalid'));
         }
 
-        if ($resultData === false || (is_string($resultData) && !strlen($resultData)))
+        if ($resultData === false || (is_string($resultData) && !strlen($resultData))) {
             throw new ApplicationException(Lang::get('system::lang.server.response_invalid'));
+        }
 
         return $resultData;
     }
@@ -514,18 +768,18 @@ class UpdateManager
     {
         $filePath = $this->getFilePath($fileCode);
 
-        try {
-            $result = Http::post($this->createServerUrl($uri), function($http) use ($postData, $filePath) {
-                $this->applyHttpAttributes($http, $postData);
-                $http->toFile($filePath);
-            });
-        }
-        catch (Exception $ex) {
-            throw new ApplicationException(Lang::get('system::lang.server.connect_error'));
+        if ($projectId = Parameters::get('system::project.id')) {
+            $postData['project'] = $projectId;
         }
 
-        if ($result->code != 200)
-            throw new ApplicationException(Lang::get('system::lang.server.file_error'));
+        $result = Http::post($this->createServerUrl($uri), function ($http) use ($postData, $filePath) {
+            $this->applyHttpAttributes($http, $postData);
+            $http->toFile($filePath);
+        });
+
+        if ($result->code != 200) {
+            throw new ApplicationException(File::get($filePath));
+        }
 
         if (md5_file($filePath) != $expectedHash) {
             @unlink($filePath);
@@ -538,7 +792,7 @@ class UpdateManager
      * @param  string $fileCode A unique file code
      * @return string           Full path on the disk
      */
-    private function getFilePath($fileCode)
+    protected function getFilePath($fileCode)
     {
         $name = md5($fileCode) . '.arc';
         return $this->tempDirectory . '/' . $name;
@@ -560,11 +814,12 @@ class UpdateManager
      * @param  string $uri URI
      * @return string      URL
      */
-    private function createServerUrl($uri)
+    protected function createServerUrl($uri)
     {
         $gateway = Config::get('cms.updateServer', 'http://octobercms.com/api');
-        if (substr($gateway, -1) != '/')
+        if (substr($gateway, -1) != '/') {
             $gateway .= '/';
+        }
 
         return $gateway . $uri;
     }
@@ -575,9 +830,12 @@ class UpdateManager
      * @param  array $postData Post data
      * @return void
      */
-    private function applyHttpAttributes($http, $postData)
+    protected function applyHttpAttributes($http, $postData)
     {
         $postData['url'] = base64_encode(URL::to('/'));
+        if (Config::get('cms.edgeUpdates', false)) {
+            $postData['edge'] = 1;
+        }
 
         if ($this->key && $this->secret) {
             $postData['nonce'] = $this->createNonce();
@@ -585,18 +843,19 @@ class UpdateManager
             $http->header('Rest-Sign', $this->createSignature($postData, $this->secret));
         }
 
-        if ($credentials = Config::get('cms.updateAuth'))
+        if ($credentials = Config::get('cms.updateAuth')) {
             $http->auth($credentials);
+        }
 
         $http->noRedirect();
         $http->data($postData);
     }
 
     /**
-     * Create a nonce based on milisecond time
+     * Create a nonce based on millisecond time
      * @return int
      */
-    private function createNonce()
+    protected function createNonce()
     {
         $mt = explode(' ', microtime());
         return $mt[1] . substr($mt[0], 2, 6);
@@ -606,9 +865,8 @@ class UpdateManager
      * Create a unique signature for transmission.
      * @return string
      */
-    private function createSignature($data, $secret)
+    protected function createSignature($data, $secret)
     {
         return base64_encode(hash_hmac('sha512', http_build_query($data, '', '&'), base64_decode($secret), true));
     }
-
 }

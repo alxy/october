@@ -8,8 +8,7 @@ class DbSystemPluginHistory extends Migration
 
     public function up()
     {
-        Schema::create('system_plugin_history', function(Blueprint $table)
-        {
+        Schema::create('system_plugin_history', function (Blueprint $table) {
             $table->engine = 'InnoDB';
             $table->increments('id');
             $table->string('code')->index();
@@ -22,7 +21,6 @@ class DbSystemPluginHistory extends Migration
 
     public function down()
     {
-        Schema::drop('system_plugin_history');
+        Schema::dropIfExists('system_plugin_history');
     }
-
 }

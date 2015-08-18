@@ -21,7 +21,7 @@ class FlashNode extends Twig_Node
     /**
      * Compiles the node to PHP.
      *
-     * @param Twig_Compiler A Twig_Compiler instance
+     * @param Twig_Compiler $compiler A Twig_Compiler instance
      */
     public function compile(Twig_Compiler $compiler)
     {
@@ -52,7 +52,7 @@ class FlashNode extends Twig_Node
                 ->write(';')
                 ->write('foreach (Flash::')
                 ->raw($attrib)
-                ->write('() as $messages) {'.PHP_EOL)
+                ->write('() as $message) {'.PHP_EOL)
                 ->indent()
                     ->write('$context["message"] = $message;')
                     ->subcompile($this->getNode('body'))

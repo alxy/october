@@ -1,6 +1,6 @@
 @import "../../../../assets/less/core/boot.less";
 
-@codeeditor-zindex: 150;
+@codeeditor-zindex: 600;
 
 .field-codeeditor {
     width: 100%;
@@ -16,39 +16,52 @@
     &.size-large { min-height: @size-large; }
     &.size-huge { min-height: @size-huge; }
     &.size-giant { min-height: @size-giant; }
-    
+
     .ace_search {
-        font-family: @font-family-sans-serif;
+        font-family: @font-family-base;
         font-size: 14px;
+        color: @text-color;
+        z-index: @codeeditor-zindex + 3;
     }
 
     .editor-code {
         .border-radius(@border-radius-base);
     }
-    
+
     .editor-toolbar {
         position: absolute;
-        top: 0;
-        right: 3px;
+        top: 10px;
+        right: 10px;
         z-index: @codeeditor-zindex;
         > ul, ul > li { list-style-type: none; padding: 0; margin: 0; }
         > ul > li {
             float: left;
-            padding: 2px 5px;
-            height: 25px;
+
+            .tooltip.left {
+                margin-right: 25px;
+            }
         }
         > ul > li > a {
+            display: block;
+            height: 25px;
+            width: 25px;
             color: #666;
             font-size: 20px;
+            text-align: center;
             text-decoration: none;
-            > abbr { .text-hide(); }
+            > abbr {
+                position: absolute;
+                .text-hide();
+            }
             > i {
-                .opacity(.4);
+                .opacity(.7);
                 display: block;
-                &:before {font-size: 14px;}
+                &:before {
+                    font-size: 15px;
+                }
             }
             &:hover, &:focus {
-                > i{ .opacity(1); }
+                > i { .opacity(1); }
             }
 
         }

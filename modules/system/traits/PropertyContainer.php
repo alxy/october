@@ -42,7 +42,7 @@ trait PropertyContainer
     }
 
     /**
-     * Defines the properties used by this class. 
+     * Defines the properties used by this class.
      * This method should be used as an override in the extended class.
      */
     public function defineProperties()
@@ -76,13 +76,13 @@ trait PropertyContainer
 
     /**
      * Returns a defined property value or default if one is not set.
-     * @param $name The property name to look for.
-     * @param $default A default value to return if no name is found.
+     * @param string $name The property name to look for.
+     * @param string $default A default value to return if no name is found.
      * @return string The property value or the default specified.
      */
     public function property($name, $default = null)
     {
-        return isset($this->properties[$name])
+        return array_key_exists($name, $this->properties)
             ? $this->properties[$name]
             : $default;
     }

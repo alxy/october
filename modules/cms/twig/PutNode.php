@@ -12,15 +12,15 @@ use Twig_NodeInterface;
  */
 class PutNode extends Twig_Node
 {
-    public function __construct(Twig_NodeInterface $body, $name, $lineno, $tag = 'put')
+    public function __construct(Twig_NodeInterface $body, $name, $endType, $lineno, $tag = 'put')
     {
-        parent::__construct(['body' => $body], ['name' => $name], $lineno, $tag);
+        parent::__construct(['body' => $body], ['name' => $name, 'endType' => $endType], $lineno, $tag);
     }
 
     /**
      * Compiles the node to PHP.
      *
-     * @param Twig_Compiler A Twig_Compiler instance
+     * @param Twig_Compiler $compiler A Twig_Compiler instance
      */
     public function compile(Twig_Compiler $compiler)
     {
@@ -31,11 +31,15 @@ class PutNode extends Twig_Node
             ->write(");\n")
         ;
 
+        $isOverwrite = strtolower($this->getAttribute('endType')) == 'overwrite';
+
         $compiler->subcompile($this->getNode('body'));
 
         $compiler
             ->addDebugInfo($this)
-            ->write("echo \$this->env->getExtension('CMS')->endBlock();\n")
+            ->write("echo \$this->env->getExtension('CMS')->endBlock(")
+            ->raw($isOverwrite ? 'false' : 'true')
+            ->write(");\n")
         ;
     }
 }

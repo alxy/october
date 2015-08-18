@@ -1,5 +1,7 @@
 <?php namespace Backend\Classes;
 
+use October\Rain\Html\Helper as HtmlHelper;
+
 /**
  * List Columns definition
  * A translation of the list column configuration
@@ -9,7 +11,6 @@
  */
 class ListColumn
 {
-
     /**
      * @var string List column name.
      */
@@ -41,7 +42,19 @@ class ListColumn
     public $sortable = true;
 
     /**
-     * @var string Custom SQL for selecting this record value.
+     * @var string Model attribute to use for the display value, this will
+     * override any $sqlSelect definition.
+     */
+    public $valueFrom;
+
+    /**
+     * @var string Specifies a default value when value is empty.
+     */
+    public $defaults;
+
+    /**
+     * @var string Custom SQL for selecting this record display value,
+     * the @ symbol is replaced with the table name.
      */
     public $sqlSelect;
 
@@ -51,17 +64,36 @@ class ListColumn
     public $relation;
 
     /**
-     * @var string Specify a CSS class to attach to the list row element.
+     * @var string sets the column width, can be specified in percents (10%) or pixels (50px).
+     * There could be a single column without width specified, it will be stretched to take the
+     * available space.
+     */
+    public $width;
+
+    /**
+     * @var string Specify a CSS class to attach to the list cell element.
      */
     public $cssClass;
 
     /**
-     * @var string Specify a format or style for the column value, such as a Date
+     * @var string Specify a format or style for the column value, such as a Date.
      */
     public $format;
 
     /**
-     * Constructor
+     * @var string Specifies a path for partial-type fields.
+     */
+    public $path;
+
+    /**
+     * @var array Raw field configuration.
+     */
+    public $config;
+
+    /**
+     * Constructor.
+     * @param string $columnName
+     * @param string $label
      */
     public function __construct($columnName, $label)
     {
@@ -75,19 +107,81 @@ class ListColumn
      * - number - numeric column, aligned right
      * @param string $type Specifies a render mode as described above
      */
-    public function displayAs($type)
+    public function displayAs($type, $config)
     {
-        $this->type = $type;
+        $this->type = strtolower($type) ?: $this->type;
+        $this->config = $this->evalConfig($config);
         return $this;
     }
 
     /**
-     * Specifies CSS classes to apply to the table row element.
+     * Process options and apply them to this object.
+     * @param array $config
+     * @return array
      */
-    public function cssClass($class)
+    protected function evalConfig($config)
     {
-        $this->cssClass = $class;
-        return $this;
+        if (isset($config['width'])) {
+            $this->width = $config['width'];
+        }
+        if (isset($config['cssClass'])) {
+            $this->cssClass = $config['cssClass'];
+        }
+        if (isset($config['searchable'])) {
+            $this->searchable = $config['searchable'];
+        }
+        if (isset($config['sortable'])) {
+            $this->sortable = $config['sortable'];
+        }
+        if (isset($config['invisible'])) {
+            $this->invisible = $config['invisible'];
+        }
+        if (isset($config['valueFrom'])) {
+            $this->valueFrom = $config['valueFrom'];
+        }
+        if (isset($config['default'])) {
+            $this->defaults = $config['default'];
+        }
+        if (isset($config['select'])) {
+            $this->sqlSelect = $config['select'];
+        }
+        if (isset($config['relation'])) {
+            $this->relation = $config['relation'];
+        }
+        if (isset($config['format'])) {
+            $this->format = $config['format'];
+        }
+        if (isset($config['path'])) {
+            $this->path = $config['path'];
+        }
+
+        return $config;
     }
 
+    /**
+     * Returns a HTML valid name for the column name.
+     * @return string
+     */
+    public function getName()
+    {
+        return HtmlHelper::nameToId($this->columnName);
+    }
+
+    /**
+     * Returns a value suitable for the column id property.
+     * @param  string $suffix Specify a suffix string
+     * @return string
+     */
+    public function getId($suffix = null)
+    {
+        $id = 'column';
+
+        $id .= '-'.$this->columnName;
+
+        if ($suffix) {
+            $id .= '-'.$suffix;
+        }
+
+        return HtmlHelper::nameToId($id);
+    }
 }

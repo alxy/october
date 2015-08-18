@@ -1,20 +1,25 @@
-fields:
-  fileName:
-    label: File Name
-    attributes:
-      default-focus: 1
+# ===================================
+#  Form Field Definitions
+# ===================================
 
-  toolbar:
-    type: partial
-    path: content_toolbar
-    cssClass: collapse-visible
+fields:
+    fileName:
+        label: cms::lang.editor.filename
+        attributes:
+            default-focus: 1
+
+    toolbar:
+        type: partial
+        path: content_toolbar
+        cssClass: collapse-visible
+
+    components: Cms\FormWidgets\Components
 
 secondaryTabs:
-  stretch: true
-  fields:
-    content:
-      tab: Content
-      type: codeeditor
-      stretch: true
-      options:
-        language: html
+    stretch: true
+    fields:
+        markup:
+            tab: cms::lang.editor.content
+            stretch: true
+            type: codeeditor
+            language: html

@@ -3,17 +3,16 @@
     <head>
         <meta charset="utf-8">
         <title>Exception</title>
-        <link href="<?= URL::to('/modules/system/assets/vendor/font-awesome/css/font-awesome.css') ?>" rel="stylesheet">
-        <link href="<?= URL::to('/modules/system/assets/css/styles.css') ?>" rel="stylesheet">
-        <script src="<?= URL::to('/modules/system/assets/vendor/syntaxhighlighter/scripts/shCore.js') ?>"></script>
-        <script src="<?= URL::to('/modules/system/assets/vendor/syntaxhighlighter/scripts/shBrushPhp.js') ?>"></script>
-        <script src="<?= URL::to('/modules/system/assets/vendor/syntaxhighlighter/scripts/shBrushXml.js') ?>"></script>
-        <link href="<?= URL::to('/modules/system/assets/vendor/syntaxhighlighter/styles/shCore.css') ?>">
+        <link href="<?= Url::asset('/modules/system/assets/css/styles.css') ?>" rel="stylesheet">
+        <script src="<?= Url::asset('/modules/system/assets/vendor/syntaxhighlighter/scripts/shCore.js') ?>"></script>
+        <script src="<?= Url::asset('/modules/system/assets/vendor/syntaxhighlighter/scripts/shBrushPhp.js') ?>"></script>
+        <script src="<?= Url::asset('/modules/system/assets/vendor/syntaxhighlighter/scripts/shBrushXml.js') ?>"></script>
+        <link href="<?= Url::asset('/modules/system/assets/vendor/syntaxhighlighter/styles/shCore.css') ?>">
     </head>
     <body>
         <div class="container">
 
-            <h1><i class="icon-off warning"></i> Error</h1>
+            <h1><i class="icon-power-off warning"></i> Error</h1>
 
             <p class="lead">We're sorry, but an unhandled error occurred. Please see the details below.</p>
 

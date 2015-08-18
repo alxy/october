@@ -2,8 +2,9 @@
 
 use Str;
 use File;
-use stdClass;
 use Session;
+use October\Rain\Html\Helper as HtmlHelper;
+use stdClass;
 
 /**
  * Widget base class.
@@ -13,15 +14,14 @@ use Session;
  */
 abstract class WidgetBase
 {
-
+    use \System\Traits\ViewMaker;
     use \System\Traits\AssetMaker;
     use \System\Traits\ConfigMaker;
-    use \Backend\Traits\ViewMaker;
     use \Backend\Traits\WidgetMaker;
     use \October\Rain\Support\Traits\Emitter;
 
     /**
-     * @var array Supplied configuration.
+     * @var object Supplied configuration.
      */
     public $config;
 
@@ -31,51 +31,41 @@ abstract class WidgetBase
     protected $controller;
 
     /**
-     * @var string A unique alias to identify this widget.
-     */
-    public $defaultAlias = 'widget';
-
-    /**
      * @var string Defined alias used for this widget.
      */
     public $alias;
 
     /**
+     * @var string A unique alias to identify this widget.
+     */
+    protected $defaultAlias = 'widget';
+
+    /**
      * Constructor
      * @param Backend\Classes\Controller $controller
-     * @param array $configuration Proactive configuration definintion.
+     * @param array $configuration Proactive configuration definition.
      * @return void
      */
     public function __construct($controller, $configuration = [])
     {
         $this->controller = $controller;
-
-        // Option A: (@todo Determine which is faster by benchmark)
-        // $relativePath = strtolower(str_replace('\\', '/', get_called_class()));
-        // $this->viewPath = $this->configPath = ['modules/' . $relativePath . '/partials', 'plugins/' . $relativePath . '/partials'];
-        // $this->assetPath = ['modules/' . $relativePath . '/assets', 'plugins/' . $relativePath . '/assets'];
-
-        // Option B:
         $this->viewPath = $this->configPath = $this->guessViewPath('/partials');
         $this->assetPath = $this->guessViewPath('/assets', true);
 
         /*
-         * Apply configuration values to a new config object.
+         * Apply configuration values to a new config object, if a parent
+         * consutrctor hasn't done it already.
          */
-        if (!$configuration)
-            $configuration = [];
-
-        $this->config = new stdClass();
-        foreach ($configuration as $name => $value) {
-            $name = camel_case($name);
-            $this->config->{$name} = $value;
+        if ($this->config === null) {
+            $this->config = $this->makeConfig($configuration);
         }
 
         /*
          * If no alias is set by the configuration.
          */
-        if (!isset($this->alias))
+        if (!isset($this->alias)) {
             $this->alias = (isset($this->config->alias)) ? $this->config->alias : $this->defaultAlias;
+        }
 
         /*
          * Prepare assets used by this widget.
@@ -85,28 +75,35 @@ abstract class WidgetBase
         /*
          * Initialize the widget.
          */
-        if (!$this->getConfig('noInit', false))
+        if (!$this->getConfig('noInit', false)) {
             $this->init();
+        }
     }
 
     /**
      * Initialize the widget, called by the constructor and free from its parameters.
      * @return void
      */
-    public function init(){}
+    public function init()
+    {
+    }
 
     /**
      * Renders the widgets primary contents.
      * @return string HTML markup supplied by this widget.
      */
-    public function render(){}
+    public function render()
+    {
+    }
 
     /**
      * Adds widget specific asset files. Use $this->addJs() and $this->addCss()
      * to register new assets to include on the page.
      * @return void
      */
-    protected function loadAssets(){}
+    protected function loadAssets()
+    {
+    }
 
     /**
      * Binds a widget to the controller for safe use.
@@ -114,10 +111,31 @@ abstract class WidgetBase
      */
     public function bindToController()
     {
-        if ($this->controller->widget === null)
+        if ($this->controller->widget === null) {
             $this->controller->widget = new \stdClass();
+        }
 
         $this->controller->widget->{$this->alias} = $this;
+    }
+
+    /**
+     * Transfers config values stored inside the $config property directly
+     * on to the root object properties. If no properties are defined
+     * all config will be transferred if it finds a matching property.
+     * @param array $properties
+     * @return void
+     */
+    protected function fillFromConfig($properties = null)
+    {
+        if ($properties === null) {
+            $properties = array_keys((array) $this->config);
+        }
+
+        foreach ($properties as $property) {
+            if (property_exists($this, $property)) {
+                $this->{$property} = $this->getConfig($property, $this->{$property});
+            }
+        }
     }
 
     /**
@@ -127,11 +145,17 @@ abstract class WidgetBase
      */
     public function getId($suffix = null)
     {
-        $id = Str::getRealClass(get_called_class()) . '-' . $this->alias;
-        if ($suffix !== null)
-            $id .= '-' . $suffix;
+        $id = class_basename(get_called_class());
 
-        return $id;
+        if ($this->alias != $this->defaultAlias) {
+            $id .= '-' . $this->alias;
+        }
+
+        if ($suffix !== null) {
+            $id .= '-' . $suffix;
+        }
+
+        return HtmlHelper::nameToId($id);
     }
 
     /**
@@ -155,14 +179,15 @@ abstract class WidgetBase
         /*
          * Array field name, eg: field[key][key2][key3]
          */
-        $keyParts = Str::evalHtmlArray($name);
+        $keyParts = HtmlHelper::nameToArray($name);
 
         /*
          * First part will be the field name, pop it off
          */
         $fieldName = array_shift($keyParts);
-        if (!isset($this->config->{$fieldName}))
+        if (!isset($this->config->{$fieldName})) {
             return $default;
+        }
 
         $result = $this->config->{$fieldName};
 
@@ -170,13 +195,22 @@ abstract class WidgetBase
          * Loop the remaining key parts and build a result
          */
         foreach ($keyParts as $key) {
-            if (!array_key_exists($key, $result))
+            if (!array_key_exists($key, $result)) {
                 return $default;
+            }
 
             $result = $result[$key];
         }
 
         return $result;
+    }
+
+    /**
+     * Returns the controller using this widget.
+     */
+    public function getController()
+    {
+        return $this->controller;
     }
 
     //
@@ -200,7 +234,7 @@ abstract class WidgetBase
     }
 
     /**
-     * Retreieves a widget related key/value pair from session data.
+     * Retrieves a widget related key/value pair from session data.
      * @param string $key Unique key for the data store.
      * @param string $default A default value to use when value is not found.
      * @return string
@@ -210,11 +244,13 @@ abstract class WidgetBase
         $sessionId = $this->makeSessionId();
 
         $currentStore = [];
-        if (Session::has($sessionId))
+        if (Session::has($sessionId)) {
             $currentStore = unserialize(Session::get($sessionId));
+        }
 
-        if ($key === null)
+        if ($key === null) {
             return $currentStore;
+        }
 
         return isset($currentStore[$key]) ? $currentStore[$key] : $default;
     }
@@ -225,7 +261,11 @@ abstract class WidgetBase
      */
     protected function makeSessionId()
     {
-        return 'widget.' . $this->controller->getId() . '-' . $this->getId();
+        // Removes Class name and "Controllers" directory
+        $rootNamespace = Str::getClassId(Str::getClassNamespace(Str::getClassNamespace($this->controller)));
+
+        // The controller action is intentionally omitted, session should be shared for all actions
+        return 'widget.' . $rootNamespace . '-' . class_basename($this->controller) . '-' . $this->getId();
     }
 
     /**
@@ -237,5 +277,4 @@ abstract class WidgetBase
         $sessionId = $this->makeSessionId();
         Session::forget($sessionId);
     }
-
 }

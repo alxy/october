@@ -1,10 +1,10 @@
 <?php namespace Backend\Classes;
 
-use Str;
 use Lang;
-use System\Classes\ApplicationException;
+use ApplicationException;
 use October\Rain\Extension\ExtensionBase;
-use Backend\Traits\ViewMaker;
+use System\Traits\ViewMaker;
+use October\Rain\Html\Helper as HtmlHelper;
 
 /**
  * Controller Behavior base class
@@ -14,10 +14,10 @@ use Backend\Traits\ViewMaker;
  */
 class ControllerBehavior extends ExtensionBase
 {
+    use \Backend\Traits\WidgetMaker;
     use \System\Traits\AssetMaker;
     use \System\Traits\ConfigMaker;
-    use \Backend\Traits\WidgetMaker;
-    use \Backend\Traits\ViewMaker {
+    use \System\Traits\ViewMaker {
         ViewMaker::makeFileContents as localMakeFileContents;
     }
 
@@ -42,13 +42,6 @@ class ControllerBehavior extends ExtensionBase
     public function __construct($controller)
     {
         $this->controller = $controller;
-
-        // Option A: (@todo Determine which is faster by benchmark)
-        // $relativePath = strtolower(str_replace('\\', '/', get_called_class()));
-        // $this->viewPath = $this->configPath = ['modules/' . $relativePath . '/partials', 'plugins/' . $relativePath . '/partials'];
-        // $this->assetPath = ['modules/' . $relativePath . '/assets', 'plugins/' . $relativePath . '/assets'];
-
-        // Option B:
         $this->viewPath = $this->configPath = $this->guessViewPath('/partials');
         $this->assetPath = $this->guessViewPath('/assets', true);
 
@@ -71,7 +64,7 @@ class ControllerBehavior extends ExtensionBase
      * @param mixed $config   Config object or array
      * @param array $required Required config items
      */
-    public function setConfig($config, $required = null)
+    public function setConfig($config, $required = [])
     {
         $this->config = $this->makeConfig($config, $required);
     }
@@ -82,19 +75,27 @@ class ControllerBehavior extends ExtensionBase
      * @param $default Default value if nothing is found
      * @return string
      */
-    public function getConfig($name, $default = null)
+    public function getConfig($name = null, $default = null)
     {
+        /*
+         * Return all config
+         */
+        if (is_null($name)) {
+            return $this->config;
+        }
+
         /*
          * Array field name, eg: field[key][key2][key3]
          */
-        $keyParts = Str::evalHtmlArray($name);
+        $keyParts = HtmlHelper::nameToArray($name);
 
         /*
          * First part will be the field name, pop it off
          */
         $fieldName = array_shift($keyParts);
-        if (!isset($this->config->{$fieldName}))
+        if (!isset($this->config->{$fieldName})) {
             return $default;
+        }
 
         $result = $this->config->{$fieldName};
 
@@ -102,8 +103,9 @@ class ControllerBehavior extends ExtensionBase
          * Loop the remaining key parts and build a result
          */
         foreach ($keyParts as $key) {
-            if (!array_key_exists($key, $result))
+            if (!is_array($result) || !array_key_exists($key, $result)) {
                 return $default;
+            }
 
             $result = $result[$key];
         }
@@ -116,13 +118,14 @@ class ControllerBehavior extends ExtensionBase
      * These methods could be defined in a controller to override a behavior default action.
      * Such methods should be defined as public, to allow the behavior object to access it.
      * By default public methods of a controller are considered as actions.
-     * To prevent this occurance, methods should be hidden by using this method.
+     * To prevent this occurrence, methods should be hidden by using this method.
      * @param mixed $methodName Specifies a method name.
      */
     protected function hideAction($methodName)
     {
-        if (!is_array($methodName))
+        if (!is_array($methodName)) {
             $methodName = [$methodName];
+        }
 
         $this->controller->hiddenActions = array_merge($this->controller->hiddenActions, $methodName);
     }

@@ -1,5 +1,6 @@
 <?php namespace Backend\Classes;
 
+use System\Classes\PluginManager;
 use October\Rain\Auth\Manager as RainAuthManager;
 
 /**
@@ -26,27 +27,27 @@ class AuthManager extends RainAuthManager
     // Permission management
     //
 
-    static $permissionDefaults = [
+    protected static $permissionDefaults = [
         'code'    => null,
         'label'   => null,
         'comment' => null,
-        'order'   => 100,
+        'order'   => 500
     ];
 
     /**
      * @var array Cache of registration callbacks.
      */
-    private $callbacks = [];
+    protected $callbacks = [];
 
     /**
      * @var array List of registered permissions.
      */
-    private $permissions = [];
+    protected $permissions = [];
 
     /**
      * @var array Cache of registered permissions.
      */
-    private $permissionCache = false;
+    protected $permissionCache = false;
 
     /**
      * Registers a callback function that defines authentication permissions.
@@ -77,12 +78,12 @@ class AuthManager extends RainAuthManager
      * @param string $owner Specifies the menu items owner plugin or module in the format Vendor/Module.
      * @param array $definitions An array of the menu item definitions.
      */
-    public function registerPermissions($owner, array $definitions) 
+    public function registerPermissions($owner, array $definitions)
     {
-        foreach ($definitions as $code=>$definition) {
+        foreach ($definitions as $code => $definition) {
             $permission = (object)array_merge(self::$permissionDefaults, array_merge($definition, [
-                'code'=>$code,
-                'owner'=>$owner
+                'code' => $code,
+                'owner' => $owner
             ]));
 
             $this->permissions[] = $permission;
@@ -90,21 +91,43 @@ class AuthManager extends RainAuthManager
     }
 
     /**
-     * Returns a list of the main menu items.
+     * Returns a list of the registered permissions items.
      * @return array 
      */
     public function listPermissions()
     {
-        if ($this->permissionCache !== false)
+        if ($this->permissionCache !== false) {
             return $this->permissionCache;
+        }
 
+        /*
+         * Load module items
+         */
         foreach ($this->callbacks as $callback) {
             $callback($this);
         }
 
-        usort($this->permissions, function($a, $b) {
-            if ($a->order == $b->order)
+        /*
+         * Load plugin items
+         */
+        $plugins = PluginManager::instance()->getPlugins();
+
+        foreach ($plugins as $id => $plugin) {
+            $items = $plugin->registerPermissions();
+            if (!is_array($items)) {
+                continue;
+            }
+
+            $this->registerPermissions($id, $items);
+        }
+
+        /*
+         * Sort permission items
+         */
+        usort($this->permissions, function ($a, $b) {
+            if ($a->order == $b->order) {
                 return 0;
+            }
 
             return $a->order > $b->order ? 1 : -1;
         });
@@ -112,4 +135,23 @@ class AuthManager extends RainAuthManager
         return $this->permissionCache = $this->permissions;
     }
 
+    /**
+     * Returns an array of registered permissions, grouped by tabs.
+     * @return array
+     */
+    public function listTabbedPermissions()
+    {
+        $tabs = [];
+
+        foreach ($this->listPermissions() as $permission) {
+            $tab = isset($permission->tab) ? $permission->tab : null;
+            if (!array_key_exists($tab, $tabs)) {
+                $tabs[$tab] = [];
+            }
+
+            $tabs[$tab][] = $permission;
+        }
+
+        return $tabs;
+    }
 }

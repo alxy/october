@@ -1,7 +1,6 @@
 <?php namespace Backend\Widgets;
 
-use Input;
-use October\Rain\Support\Util;
+use Lang;
 use Backend\Classes\WidgetBase;
 
 /**
@@ -13,41 +12,63 @@ use Backend\Classes\WidgetBase;
  */
 class Search extends WidgetBase
 {
-    /**
-     * {@inheritDoc}
-     */
-    public $defaultAlias = 'search';
+    //
+    // Configurable properties
+    //
 
     /**
-     * @var string Search placeholder text
+     * @var string Search placeholder text.
      */
-    public $placeholder;
+    public $prompt;
 
     /**
-     * @var string Active search term pulled from session data
+     * @var bool Field show grow when selected.
      */
-    public $activeTerm;
+    public $growable = true;
 
     /**
      * @var string Custom partial file definition, in context of the controller.
      */
-    public $customPartial;
+    public $partial;
+
+    //
+    // Object properties
+    //
 
     /**
-     * Constructor.
+     * {@inheritDoc}
      */
-    public function __construct($controller, $configuration = [])
+    protected $defaultAlias = 'search';
+
+    /**
+     * @var string Active search term pulled from session data.
+     */
+    protected $activeTerm;
+
+    /**
+     * @var array List of CSS classes to apply to the list container element.
+     */
+    public $cssClasses = [];
+
+    /**
+     * Initialize the widget, called by the constructor and free from its parameters.
+     */
+    public function init()
     {
-        parent::__construct($controller, $configuration);
+        $this->fillFromConfig([
+            'prompt',
+            'partial',
+            'growable',
+        ]);
 
         /*
-         * Process configuration
+         * Add CSS class styles
          */
-        if (isset($this->config->prompt))
-            $this->placeholder = trans($this->config->prompt);
+        $this->cssClasses[] = 'icon search';
 
-        if (isset($this->config->partial))
-            $this->customPartial = $this->config->partial;
+        if ($this->growable) {
+            $this->cssClasses[] = 'growable';
+        }
     }
 
     /**
@@ -57,10 +78,12 @@ class Search extends WidgetBase
     {
         $this->prepareVars();
 
-        if ($this->customPartial)
-            return $this->controller->makePartial($this->customPartial);
-        else
+        if ($this->partial) {
+            return $this->controller->makePartial($this->partial);
+        }
+        else {
             return $this->makePartial('search');
+        }
     }
 
     /**
@@ -68,7 +91,8 @@ class Search extends WidgetBase
      */
     public function prepareVars()
     {
-        $this->vars['placeholder'] = $this->placeholder;
+        $this->vars['cssClasses'] = implode(' ', $this->cssClasses);
+        $this->vars['placeholder'] = Lang::get($this->prompt);
         $this->vars['value'] = $this->getActiveTerm();
     }
 
@@ -80,18 +104,16 @@ class Search extends WidgetBase
         /*
          * Save or reset search term in session
          */
-        $term = post('term');
-        if (strlen($term))
-            $this->putSession('term', $term);
-        else
-            $this->resetSession();
+        $this->setActiveTerm(post($this->getName()));
 
         /*
          * Trigger class event, merge results as viewable array
          */
         $params = func_get_args();
         $result = $this->fireEvent('search.submit', [$params]);
-        return Util::arrayMerge($result);
+        if ($result && is_array($result)) {
+            return call_user_func_array('array_merge', $result);
+        }
     }
 
     /**
@@ -100,5 +122,29 @@ class Search extends WidgetBase
     public function getActiveTerm()
     {
         return $this->activeTerm = $this->getSession('term', '');
+    }
+
+    /**
+     * Sets an active search term for this widget instance.
+     */
+    public function setActiveTerm($term)
+    {
+        if (strlen($term)) {
+            $this->putSession('term', $term);
+        }
+        else {
+            $this->resetSession();
+        }
+
+        $this->activeTerm = $term;
+    }
+
+    /**
+     * Returns a value suitable for the field name property.
+     * @return string
+     */
+    public function getName()
+    {
+        return $this->alias . '[term]';
     }
 }

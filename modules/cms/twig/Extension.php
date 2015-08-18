@@ -3,13 +3,14 @@
 use URL;
 use Flash;
 use Block;
+use Event;
 use Twig_Extension;
 use Twig_TokenParser;
 use Twig_SimpleFilter;
 use Twig_SimpleFunction;
 use Cms\Classes\Controller;
 use Cms\Classes\CmsException;
-use Cms\Classes\MarkupManager;
+use ApplicationException;
 
 /**
  * The CMS Twig extension class implements the basic CMS Twig functions and filters.
@@ -22,21 +23,15 @@ class Extension extends Twig_Extension
     /**
      * @var \Cms\Classes\Controller A reference to the CMS controller.
      */
-    private $controller;
-
-    /**
-     * @var \Cms\Classes\MarkupManager A reference to the markup manager instance.
-     */
-    private $markupManager;
+    protected $controller;
 
     /**
      * Creates the extension instance.
      * @param \Cms\Classes\Controller $controller The CMS controller object.
      */
-    public function __construct(Controller $controller)
+    public function __construct(Controller $controller = null)
     {
         $this->controller = $controller;
-        $this->markupManager = MarkupManager::instance();
     }
 
     /**
@@ -56,25 +51,13 @@ class Extension extends Twig_Extension
      */
     public function getFunctions()
     {
-        $functions = [
+        return [
             new Twig_SimpleFunction('page', [$this, 'pageFunction'], ['is_safe' => ['html']]),
             new Twig_SimpleFunction('partial', [$this, 'partialFunction'], ['is_safe' => ['html']]),
             new Twig_SimpleFunction('content', [$this, 'contentFunction'], ['is_safe' => ['html']]),
             new Twig_SimpleFunction('component', [$this, 'componentFunction'], ['is_safe' => ['html']]),
             new Twig_SimpleFunction('placeholder', [$this, 'placeholderFunction'], ['is_safe' => ['html']]),
         ];
-
-        /*
-         * Include extensions provided by plugins
-         */
-        foreach ($this->markupManager->listFunctions() as $name => $callable) {
-            if (!is_callable($callable))
-                continue;
-
-            $functions[] = new Twig_SimpleFunction($name, $callable, ['is_safe' => ['html']]);
-        }
-
-        return $functions;
     }
 
     /**
@@ -84,23 +67,11 @@ class Extension extends Twig_Extension
      */
     public function getFilters()
     {
-        $filters = [
-            new Twig_SimpleFilter('app', [$this, 'appFilter'], ['is_safe' => ['html']]),
+        return [
             new Twig_SimpleFilter('page', [$this, 'pageFilter'], ['is_safe' => ['html']]),
             new Twig_SimpleFilter('theme', [$this, 'themeFilter'], ['is_safe' => ['html']]),
+            new Twig_SimpleFilter('media', [$this, 'mediaFilter'], ['is_safe' => ['html']]),
         ];
-
-        /*
-         * Include extensions provided by plugins
-         */
-        foreach ($this->markupManager->listFilters() as $name => $callable) {
-            if (!is_callable($callable))
-                continue;
-
-            $filters[] = new Twig_SimpleFilter($name, $callable, ['is_safe' => ['html']]);
-        }
-
-        return $filters;
     }
 
     /**
@@ -110,7 +81,7 @@ class Extension extends Twig_Extension
      */
     public function getTokenParsers()
     {
-        $parsers = [
+        return [
             new PageTokenParser,
             new PartialTokenParser,
             new ContentTokenParser,
@@ -123,16 +94,6 @@ class Extension extends Twig_Extension
             new ScriptsTokenParser,
             new StylesTokenParser,
         ];
-
-        $extraParsers = $this->markupManager->listTokenParsers();
-        foreach ($extraParsers as $obj) {
-            if (!$obj instanceof Twig_TokenParser)
-                continue;
-
-            $parsers[] = $obj;
-        }
-
-        return $parsers;
     }
 
     /**
@@ -158,20 +119,24 @@ class Extension extends Twig_Extension
 
     /**
      * Renders a content file.
+     * @param string $name Specifies the content block name.
+     * @param array $parameters A optional list of parameters to pass to the content.
      * @return string Returns the file contents.
      */
-    public function contentFunction($name)
+    public function contentFunction($name, $parameters = [])
     {
-        return $this->controller->renderContent($name);
+        return $this->controller->renderContent($name, $parameters);
     }
 
     /**
      * Renders a component's default content.
+     * @param string $name Specifies the component name.
+     * @param array $parameters A optional list of parameters to pass to the component.
      * @return string Returns the component default contents.
      */
-    public function componentFunction($name)
+    public function componentFunction($name, $parameters = [])
     {
-        return $this->controller->renderComponent($name);
+        return $this->controller->renderComponent($name, $parameters);
     }
 
     /**
@@ -190,11 +155,25 @@ class Extension extends Twig_Extension
      */
     public function placeholderFunction($name, $default = null)
     {
-        if (($result = Block::get($name)) === null)
+        if (($result = Block::get($name)) === null) {
             return null;
+        }
 
         $result = str_replace('<!-- X_OCTOBER_DEFAULT_BLOCK_CONTENT -->', trim($default), $result);
         return $result;
+    }
+
+    /**
+     * Looks up the URL for a supplied page and returns it relative to the website root.
+     * @param mixed $name Specifies the Cms Page file name.
+     * @param array $parameters Route parameters to consider in the URL.
+     * @param bool $routePersistence By default the existing routing parameters will be included
+     * when creating the URL, set to false to disable this feature.
+     * @return string
+     */
+    public function pageFilter($name, $parameters = [], $routePersistence = true)
+    {
+        return $this->controller->pageUrl($name, $parameters, $routePersistence);
     }
 
     /**
@@ -209,26 +188,13 @@ class Extension extends Twig_Extension
     }
 
     /**
-     * Converts supplied URL to one relative to the website root.
-     * @param mixed $url Specifies the application-relative URL
+     * Converts supplied file to a URL relative to the media library.
+     * @param string $file Specifies the media-relative file
      * @return string
      */
-    public function appFilter($url)
+    public function mediaFilter($file)
     {
-        return URL::to($url);
-    }
-
-    /**
-     * Looks up the URL for a supplied page and returns it relative to the website root.
-     * @param mixed $name Specifies the Cms Page file name.
-     * @param array $parameters Route parameters to consider in the URL.
-     * @param bool $routePersistence By default the exisiting routing parameters will be included
-     * when creating the URL, set to false to disable this feature.
-     * @return string
-     */
-    public function pageFilter($name, $parameters = [], $routePersistence = true)
-    {
-        return $this->controller->pageUrl($name, $parameters, $routePersistence);
+        return $this->controller->mediaUrl($file);
     }
 
     /**
@@ -248,8 +214,12 @@ class Extension extends Twig_Extension
      */
     public function displayBlock($name, $default = null)
     {
-        if (($result = Block::placeholder($name)) === null)
-            return null;
+        if (($result = Block::placeholder($name)) === null) {
+            return $default;
+        }
+
+        if ($event = Event::fire('cms.block.render', [$name, $result], true))
+            $result = $event;
 
         $result = str_replace('<!-- X_OCTOBER_DEFAULT_BLOCK_CONTENT -->', trim($default), $result);
         return $result;
@@ -258,8 +228,8 @@ class Extension extends Twig_Extension
     /**
      * Closes a layout block.
      */
-    public function endBlock()
+    public function endBlock($append = true)
     {
-        Block::endBlock();
+        Block::endBlock($append);
     }
 }

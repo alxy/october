@@ -5,14 +5,12 @@ use Illuminate\Database\Migrations\Migration;
 
 class DbBackendUserGroups extends Migration
 {
-
     public function up()
     {
-        Schema::create('backend_user_groups', function($table)
-        {
+        Schema::create('backend_user_groups', function ($table) {
             $table->engine = 'InnoDB';
             $table->increments('id');
-            $table->string('name')->unique();
+            $table->string('name')->unique('name_unique');
             $table->text('permissions')->nullable();
             $table->timestamps();
         });
@@ -20,7 +18,6 @@ class DbBackendUserGroups extends Migration
 
     public function down()
     {
-        Schema::drop('backend_user_groups');
+        Schema::dropIfExists('backend_user_groups');
     }
-
 }

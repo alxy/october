@@ -12,9 +12,13 @@
 
     SidePanelTab.prototype.init = function() {
         var self = this
-        this.$sideNavItems = $('#layout-sidenav ul li')
+        this.tabOpenDelay = 200
+        this.tabOpenTimeout = undefined
+        this.panelOpenTimeout = undefined
+        this.$sideNav = $('#layout-sidenav')
+        this.$sideNavItems = $('ul li', this.$sideNav)
         this.$sidePanelItems = $('[data-content-id]', this.$el)
-        this.sideNavWidth = $('#layout-sidenav ul li').outerWidth()
+        this.sideNavWidth = this.$sideNavItems.outerWidth()
         this.mainNavHeight = $('#layout-mainmenu').outerHeight()
         this.panelVisible = false
         this.visibleItemId = false
@@ -41,9 +45,16 @@
         })
 
         if (!Modernizr.touch) {
-            $('#layout-sidenav').mouseenter(function(){
-               if ($(window).width() < self.options.breakpoint || !self.panelFixed())
-                    self.displaySidePanel()
+            self.$sideNav.mouseenter(function(){
+               if ($(window).width() < self.options.breakpoint || !self.panelFixed()) {
+                    self.panelOpenTimeout = setTimeout(function () {
+                        self.displaySidePanel()
+                    }, self.tabOpenDelay)
+               }
+            })
+
+            self.$sideNav.mouseleave(function(){
+                clearTimeout(self.panelOpenTimeout)
             })
 
             self.$el.mouseleave(function(){
@@ -51,9 +62,18 @@
             })
 
             self.$sideNavItems.mouseenter(function(){
-                if ($(window).width() < self.options.breakpoint || !self.panelFixed())
-                    self.displayTab(this)
+                if ($(window).width() < self.options.breakpoint || !self.panelFixed()) {
+                    var _this = this
+                    self.tabOpenTimeout = setTimeout(function () {
+                        self.displayTab(_this)
+                    }, self.tabOpenDelay)
+                }
             })
+
+            self.$sideNavItems.mouseleave(function (){
+                clearTimeout(self.tabOpenTimeout)
+            })
+
 
             $(window).resize(function() {
                 self.updatePanelPosition()
@@ -106,8 +126,9 @@
 
     SidePanelTab.prototype.hideSidePanel = function() {
         $(document.body).removeClass('display-side-panel')
-        if (this.$el.next('#layout-body').length == 0)
+        if (this.$el.next('#layout-body').length == 0) {
             $('#layout-body').before(this.$el)
+        }
 
         this.panelVisible = false
 
@@ -115,35 +136,51 @@
     }
 
     SidePanelTab.prototype.updatePanelPosition = function() {
-        this.$el.height($(document).height() - this.mainNavHeight)
+        if (!this.panelFixed() || Modernizr.touch) {
+            this.$el.height($(document).height() - this.mainNavHeight)
+        }
+        else {
+            this.$el.css('height', '')
+        }
 
-        if (this.panelVisible && $(window).width() > this.options.breakpoint && this.panelFixed())
+        if (this.panelVisible && $(window).width() > this.options.breakpoint && this.panelFixed()) {
             this.hideSidePanel()
+        }
     }
 
     SidePanelTab.prototype.updateActiveTab = function() {
-        if (!this.panelVisible && ($(window).width() < this.options.breakpoint || !this.panelFixed()))
+        if (!this.panelVisible && ($(window).width() < this.options.breakpoint || !this.panelFixed())) {
             this.$sideNavItems.removeClass('active')
+        }
         else {
             this.$sideNavItems.filter('[data-menu-item='+this.visibleItemId+']').addClass('active')
         }
     }
 
     SidePanelTab.prototype.panelFixed = function() {
-        return !$(document.body).hasClass('side-panel-not-fixed')
+        return !($(window).width() < this.options.breakpoint) &&
+            !$(document.body).hasClass('side-panel-not-fixed')
     }
 
     SidePanelTab.prototype.fixPanel = function() {
         $(document.body).toggleClass('side-panel-not-fixed')
 
-        var fixed = this.panelFixed()
+        var self = this
 
-        fixed
-            ? this.updateActiveTab()
-            : this.hideSidePanel()
+        window.setTimeout(function() {
+            var fixed = self.panelFixed()
 
-        if (typeof(localStorage) !== 'undefined')
-            localStorage.ocSidePanelFixed = fixed ? 1 : 0
+            if (fixed) {
+                self.updateActiveTab()
+                $(document.body).addClass('side-panel-fix-shadow')
+            } else {
+                $(document.body).removeClass('side-panel-fix-shadow')
+                self.hideSidePanel()
+            }
+
+            if (typeof(localStorage) !== 'undefined')
+                localStorage.ocSidePanelFixed = fixed ? 1 : 0
+        }, 0)
     }
 
     SidePanelTab.DEFAULTS = {

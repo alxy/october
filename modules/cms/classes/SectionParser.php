@@ -1,5 +1,7 @@
 <?php namespace Cms\Classes;
 
+use Str;
+
 /**
  * This class parses CMS object files (pages, partials and layouts).
  * Returns the structured file information.
@@ -33,8 +35,9 @@ class SectionParser
     {
         $sections = preg_split('/^={2,}\s*/m', $content, -1);
         $count = count($sections);
-        foreach ($sections as &$section)
+        foreach ($sections as &$section) {
             $section = trim($section);
+        }
 
         $result = [
             'settings' => [],
@@ -56,8 +59,9 @@ class SectionParser
             $result['settings'] = parse_ini_string($sections[0], true);
             $result['markup'] = $sections[1];
         }
-        elseif ($count == 1)
+        elseif ($count == 1) {
             $result['markup'] = $sections[0];
+        }
 
         return $result;
     }
@@ -70,6 +74,7 @@ class SectionParser
      */
     public static function parseOffset($content)
     {
+        $content = Str::normalizeEol($content);
         $sections = preg_split('/^={2,}\s*/m', $content, -1);
         $count = count($sections);
 
@@ -97,8 +102,8 @@ class SectionParser
 
     /**
      * Returns the line number of a found instance of CMS object section separator (==).
-     * @param $content Object content
-     * @param $instance Which instance to look for
+     * @param string $content Object content
+     * @param int $instance Which instance to look for
      * @return int The line number the instance was found.
      */
     private static function calculateLinePosition($content, $instance = 1)
@@ -106,11 +111,13 @@ class SectionParser
         $count = 0;
         $lines = explode(PHP_EOL, $content);
         foreach ($lines as $number => $line) {
-            if (trim($line) == self::SECTION_SEPARATOR)
+            if (trim($line) == self::SECTION_SEPARATOR) {
                 $count++;
+            }
 
-            if ($count == $instance)
+            if ($count == $instance) {
                 return static::adjustLinePosition($content, $number);
+            }
         }
 
         return null;
@@ -120,8 +127,8 @@ class SectionParser
      * Pushes the starting line number forward since it is not always directly
      * after the separator (==). There can be an opening tag or white space in between
      * where the section really begins.
-     * @param $content Object content
-     * @param $startLine The calculated starting line from calculateLinePosition()
+     * @param string $content Object content
+     * @param int $startLine The calculated starting line from calculateLinePosition()
      * @return int The adjusted line number.
      */
     private static function adjustLinePosition($content, $startLine = -1)
@@ -150,7 +157,7 @@ class SectionParser
             }
 
             /*
-             * PHP namespaced line (use x;)
+             * PHP namespaced line (use x;) {
              * Don't increase the line count, it will be rewritten by Cms\Classes\CodeParser
              */
             if (preg_match_all('/(use\s+[a-z0-9_\\\\]+;\n?)/mi', $line) == 1) {

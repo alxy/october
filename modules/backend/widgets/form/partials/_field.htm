@@ -1,13 +1,15 @@
-<div class="form-group <?= $this->previewMode ? 'form-group-preview' : '' ?> <?= $field->type ?>-field span-<?= $field->span ?> <?= $field->required?'is-required':'' ?> <?= $field->stretch?'layout-relative':'' ?> <?= $field->cssClass ?>">
+<?php if (!$field->hidden): ?>
 
-    <?php if (in_array($field->type, ['checkbox', 'switch'])): ?>
+    <?php if (!$this->showFieldLabels($field)): ?>
 
-        <?= $this->makePartial('field_'.$field->type, ['field' => $field]) ?>
+        <?= $this->renderFieldElement($field) ?>
 
     <?php else: ?>
 
         <?php if ($field->label): ?>
-            <label for="<?= $field->getId() ?>"><?= e(trans($field->label)) ?></label>
+            <label for="<?= $field->getId() ?>">
+                <?= e(trans($field->label)) ?>
+            </label>
         <?php endif ?>
 
         <?php if ($field->comment && $field->commentPosition == 'above'): ?>
@@ -21,4 +23,5 @@
         <?php endif ?>
 
     <?php endif ?>
-</div>
+
+<?php endif ?>

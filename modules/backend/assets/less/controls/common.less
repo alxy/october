@@ -26,6 +26,17 @@
     }
 }
 
+//
+// Logos
+//
+
+.oc-logo-white {
+    background-image: url(../images/october-logo-white.svg);
+    background-position: 50% 50%;
+    background-repeat: no-repeat;
+    background-size: contain;
+}
+
 .oc-bg-logo {
     background-image: url(../images/october-logo-transparent.svg);
     background-position: 50% 50%;
@@ -33,53 +44,22 @@
     background-size: 50% auto;
 }
 
+
 //
-// Callouts
-// --------------------------------------------------
+// Alerts
+//
 
-.callout {
-    margin-bottom: @line-height-computed;
-    padding: @callout-padding;
-    border-left: 3px solid @callout-border;
-    code, .highlight {
-    }
-    h4 {
-        margin-top: 0;
-        margin-bottom: 5px;
-    }
-    p:last-child {
-        margin-bottom: 0;
-    }
-}
+.sweet-alert {
+    text-align: left;
 
-.callout-danger {
-    background-color: @callout-danger-bg;
-    border-color: @callout-danger-border;
     h4 {
-        color: @callout-danger-text;
+        margin: 10px 0 20px 0;
+        color: #2b3e50;
+        font-size: 18px;
     }
-}
 
-.callout-warning {
-    background-color: @callout-warning-bg;
-    border-color: @callout-warning-border;
-    h4 {
-        color: @callout-warning-text;
-    }
-}
-
-.callout-info {
-    background-color: @callout-info-bg;
-    border-color: @callout-info-border;
-    h4 {
-        color: @callout-info-text;
-    }
-}
-
-.callout-success {
-    background-color: @callout-success-bg;
-    border-color: @callout-success-border;
-    h4 {
-        color: @callout-success-text;
+    p.text-muted {
+        margin-bottom: 20px;
+        color: #555555;
     }
 }

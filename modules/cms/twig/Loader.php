@@ -1,5 +1,6 @@
 <?php namespace Cms\Twig;
 
+use Event;
 use Twig_LoaderInterface;
 use Cms\Classes\CmsObject;
 
@@ -18,23 +19,42 @@ class Loader implements Twig_LoaderInterface
 
     /**
      * Sets a CMS object to load the template from.
-     * @param \Cms\CmsObject $obj Specifies the CMS object.
+     * @param \Cms\Classes\CmsObject $obj Specifies the CMS object.
      */
     public function setObject(CmsObject $obj)
     {
         $this->obj = $obj;
     }
 
+    /**
+     * Returns the Twig content string.
+     * This step is cached internally by Twig.
+     */
     public function getSource($name)
     {
-        return $this->obj->getTwigContent();
+        $content = $this->obj->getTwigContent();
+
+        /*
+         * Extensibility
+         */
+        $dataHolder = (object) ['content' => $content];
+
+        Event::fire('cms.template.processTwigContent', [$this->obj, $dataHolder]);
+
+        return $dataHolder->content;
     }
 
+    /**
+     * Returns the Twig cache key.
+     */
     public function getCacheKey($name)
     {
         return $this->obj->getFullPath();
     }
 
+    /**
+     * Determines if the content is fresh.
+     */
     public function isFresh($name, $time)
     {
         return $this->obj->isLoadedFromCache();

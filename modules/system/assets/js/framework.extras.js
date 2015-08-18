@@ -43,7 +43,7 @@
             return
 
         this.indicator.removeClass('loaded')
-        $(document.body).addClass('loading')
+        $(document.body).addClass('oc-loading')
     }
 
     StripeLoadIndicator.prototype.hide = function(force) {
@@ -53,7 +53,7 @@
 
         if (this.counter <= 0) {
             this.indicator.addClass('loaded')
-            $(document.body).removeClass('loading')
+            $(document.body).removeClass('oc-loading')
         }
     }
 
@@ -65,17 +65,22 @@
     // ==============
 
     $(document)
-        .on('ajaxPromise', '[data-request]', function() {
+        .on('ajaxPromise', '[data-request]', function(event) {
+            // Prevent this event from bubbling up to a non-related data-request
+            // element, for example a <form> tag wrapping a <button> tag
+            event.stopPropagation()
+
             $.oc.stripeLoadIndicator.show()
 
             // This code will cover instances where the element has been removed
             // from the DOM, making the resolution event below an orphan.
-            var $el = $(this);
+            var $el = $(this)
             $(window).one('ajaxUpdateComplete', function(){
                 if ($el.closest('html').length === 0)
                     $.oc.stripeLoadIndicator.hide()
              })
-        }).on('ajaxFail ajaxDone', '[data-request]', function() {
+        }).on('ajaxFail ajaxDone', '[data-request]', function(event) {
+            event.stopPropagation()
             $.oc.stripeLoadIndicator.hide()
         })
 

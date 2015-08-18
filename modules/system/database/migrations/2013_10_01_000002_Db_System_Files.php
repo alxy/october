@@ -8,8 +8,7 @@ class DbSystemFiles extends Migration
 
     public function up()
     {
-        Schema::create('system_files', function(Blueprint $table)
-        {
+        Schema::create('system_files', function (Blueprint $table) {
             $table->engine = 'InnoDB';
             $table->increments('id');
             $table->string('disk_name');
@@ -21,7 +20,7 @@ class DbSystemFiles extends Migration
             $table->string('field')->nullable()->index();
             $table->string('attachment_id')->index()->nullable();
             $table->string('attachment_type')->index()->nullable();
-            $table->boolean('public')->default(true);
+            $table->boolean('is_public')->default(true);
             $table->integer('sort_order')->nullable();
             $table->timestamps();
         });
@@ -29,7 +28,6 @@ class DbSystemFiles extends Migration
 
     public function down()
     {
-        Schema::drop('system_files');
+        Schema::dropIfExists('system_files');
     }
-
 }

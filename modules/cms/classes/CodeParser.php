@@ -4,7 +4,7 @@ use File;
 use Lang;
 use Cache;
 use Config;
-use System\Classes\SystemException;
+use SystemException;
 
 /**
  * Parses the PHP code section of CMS objects.
@@ -15,24 +15,24 @@ use System\Classes\SystemException;
 class CodeParser
 {
     /**
-     * @var \Cms\Classes\CmsCompoundObject A reference to the CMS object being parsed.
+     * @var Cms\Classes\CmsCompoundObject A reference to the CMS object being parsed.
      */
-    private $object;
+    protected $object;
 
     /**
      * @var string Contains a path to the CMS object's file being parsed.
      */
-    private $filePath;
+    protected $filePath;
 
     /**
      * @var mixed The internal cache, keeps parsed object information during a request.
      */
-    static private $cache = [];
+    static protected $cache = [];
 
     /**
      * @var string Key for the parsed PHP file information cache.
      */
-    private $dataCacheKey = 'cms-php-file-data';
+    protected $dataCacheKey = 'cms-php-file-data';
 
     /**
      * Creates the class instance
@@ -57,7 +57,6 @@ class CodeParser
         /*
          * If the object has already been parsed in this request return the cached data.
          */
-
         if (array_key_exists($this->filePath, self::$cache)) {
             self::$cache[$this->filePath]['source'] = 'request-cache';
             return self::$cache[$this->filePath];
@@ -66,7 +65,6 @@ class CodeParser
         /*
          * Try to load the parsed data from the file cache
          */
-
         $path = $this->getFilePath();
         $result = [
             'filePath' => $path,
@@ -86,7 +84,6 @@ class CodeParser
         /*
          * If the file was not found, or the cache is stale, prepare the new file and cache information about it
          */
-
         $uniqueName = uniqid().'_'.abs(crc32(md5(mt_rand())));
         $className = 'Cms'.$uniqueName.'Class';
 
@@ -99,13 +96,15 @@ class CodeParser
         $body = preg_replace($pattern, '', $body);
 
         $parentClass = $this->object->getCodeClassParent();
-        if ($parentClass !== null)
+        if ($parentClass !== null) {
             $parentClass = ' extends '.$parentClass;
+        }
 
         $fileContents = '<?php '.PHP_EOL;
 
-        foreach ($namespaces[0] as $namespace)
+        foreach ($namespaces[0] as $namespace) {
             $fileContents .= $namespace;
+        }
 
         $fileContents .= 'class '.$className.$parentClass.PHP_EOL;
         $fileContents .= '{'.PHP_EOL;
@@ -115,15 +114,18 @@ class CodeParser
         $this->validate($fileContents);
 
         $dir = dirname($path);
-        if (!File::isDirectory($dir) && !@File::makeDirectory($dir, 0777, true))
+        if (!File::isDirectory($dir) && !@File::makeDirectory($dir, 0777, true)) {
             throw new SystemException(Lang::get('system::lang.directory.create_fail', ['name'=>$dir]));
+        }
 
-        if (!@File::put($path, $fileContents))
+        if (!@File::put($path, $fileContents)) {
             throw new SystemException(Lang::get('system::lang.file.create_fail', ['name'=>$dir]));
+        }
 
         $cached = $this->getCachedInfo();
-        if (!$cached)
+        if (!$cached) {
             $cached = [];
+        }
 
         $result['className'] = $className;
         $result['source'] = 'parser';
@@ -139,20 +141,43 @@ class CodeParser
 
     /**
      * Runs the object's PHP file and returns the corresponding object.
-     * @param \Cms\Classes\Page $page Specifies the CMS page.
-     * @param \Cms\Classes\Layout $layout Specifies the CMS layout.
-     * @param \Cms\Classes\Controller $controller Specifies the CMS controller.
+     * @param Cms\Classes\Page $page Specifies the CMS page.
+     * @param Cms\Classes\Layout $layout Specifies the CMS layout.
+     * @param Cms\Classes\Controller $controller Specifies the CMS controller.
      * @return mixed
      */
     public function source($page, $layout, $controller)
     {
         $data = $this->parse();
-
-        if (!class_exists($data['className']))
-            require_once $data['filePath'];
-        
         $className = $data['className'];
+
+        if (!class_exists($className)) {
+            require_once $data['filePath'];
+        }
+
+        if (!class_exists($className) && ($data = $this->handleCorruptCache())) {
+            $className = $data['className'];
+        }
+
         return new $className($page, $layout, $controller);
+    }
+
+    /**
+     * In some rare cases the cache file will not contain the class
+     * name we expect. When this happens, destroy the corrupt file,
+     * flush the request cache, and repeat the cycle.
+     * @return void
+     */
+    protected function handleCorruptCache()
+    {
+        $path = $this->getFilePath();
+        if (File::isFile($path)) {
+            File::delete($path);
+        }
+
+        unset(self::$cache[$this->filePath]);
+
+        return $this->parse();
     }
 
     /**
@@ -171,7 +196,7 @@ class CodeParser
     protected function getFilePath()
     {
         $hash = abs(crc32($this->filePath));
-        $result = storage_path().'/cache/';
+        $result = storage_path().'/cms/cache/';
         $result .= substr($hash, 0, 2).'/';
         $result .= substr($hash, 2, 2).'/';
         $result .= basename($this->filePath).'.php';
@@ -186,8 +211,9 @@ class CodeParser
     protected function getCachedInfo()
     {
         $cached = Cache::get($this->dataCacheKey, false);
-        if ($cached !== false && ($cached = @unserialize($cached)) !== false)
+        if ($cached !== false && ($cached = @unserialize($cached)) !== false) {
             return $cached;
+        }
 
         return null;
     }
@@ -200,8 +226,9 @@ class CodeParser
     {
         $cached = $this->getCachedInfo();
         if ($cached !== null) {
-            if (array_key_exists($this->filePath, $cached))
+            if (array_key_exists($this->filePath, $cached)) {
                 return $cached[$this->filePath];
+            }
         }
 
         return null;
