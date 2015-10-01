@@ -99,7 +99,7 @@ class Index extends Controller
 
         $this->bodyClass = 'compact-container side-panel-not-fixed';
         $this->pageTitle = 'cms::lang.cms.menu_label';
-        $this->pageTitleTemplate = '%s '.trans($this->pageTitle);
+        $this->pageTitleTemplate = '%s CMS';
 
         if (Request::ajax() && Request::input('formWidgetAlias')) {
             $this->bindFormWidgetToController();
@@ -232,7 +232,8 @@ class Index extends Controller
         try {
             foreach ($templates as $path => $selected) {
                 if ($selected) {
-                    $this->loadTemplate($type, $path)->delete();
+                    $template = $this->loadTemplate($type, $path);
+                    $this->deleteTemplate($template, $type);
                     $deleted[] = $path;
                 }
             }
@@ -240,12 +241,6 @@ class Index extends Controller
         catch (Exception $ex) {
             $error = $ex->getMessage();
         }
-
-        /*
-         * Extensibility
-         */
-        Event::fire('cms.template.delete', [$this, $type]);
-        $this->fireEvent('template.delete', [$type]);
 
         return [
             'deleted' => $deleted,
@@ -259,14 +254,9 @@ class Index extends Controller
         $this->validateRequestTheme();
 
         $type = Request::input('templateType');
+        $template = $this->loadTemplate($type, trim(Request::input('templatePath')));
 
-        $this->loadTemplate($type, trim(Request::input('templatePath')))->delete();
-
-        /*
-         * Extensibility
-         */
-        Event::fire('cms.template.delete', [$this, $type]);
-        $this->fireEvent('template.delete', [$type]);
+        $this->deleteTemplate($template, $type);
     }
 
     public function onGetTemplateList()
@@ -307,7 +297,6 @@ class Index extends Controller
         $partial = ComponentPartial::load($componentObj, 'default');
         $content = $partial->getContent();
         $content = str_replace('__SELF__', $alias, $content);
-
         return $content;
     }
 
@@ -329,7 +318,7 @@ class Index extends Controller
             'partial' => '\Cms\Classes\Partial',
             'layout'  => '\Cms\Classes\Layout',
             'content' => '\Cms\Classes\Content',
-            'asset'   => '\Cms\Classes\Asset'
+            'asset'   => '\Cms\Classes\Asset',
         ];
 
         if (!array_key_exists($type, $types)) {
@@ -350,6 +339,17 @@ class Index extends Controller
         Event::fire('cms.template.processSettingsAfterLoad', [$this, $template]);
 
         return $template;
+    }
+
+    protected function deleteTemplate($template, $type)
+    {
+        $template->delete();
+
+        /*
+         * Extensibility
+         */
+        Event::fire('cms.template.delete', [$this, $template, $type]);
+        $this->fireEvent('template.delete', [$template, $type]);
     }
 
     protected function createTemplate($type)
@@ -393,7 +393,7 @@ class Index extends Controller
             'partial' => '~/modules/cms/classes/partial/fields.yaml',
             'layout'  => '~/modules/cms/classes/layout/fields.yaml',
             'content' => '~/modules/cms/classes/content/fields.yaml',
-            'asset'   => '~/modules/cms/classes/asset/fields.yaml'
+            'asset'   => '~/modules/cms/classes/asset/fields.yaml',
         ];
 
         if (!array_key_exists($type, $formConfigs)) {
@@ -428,7 +428,7 @@ class Index extends Controller
                 throw new ApplicationException(trans('cms::lang.component.invalid_request'));
             }
 
-            for ($index = 0; $index < $count; $index++) {
+            for ($index = 0; $index < $count; $index ++) {
                 $componentName = $componentNames[$index];
                 $componentAlias = $componentAliases[$index];
 
